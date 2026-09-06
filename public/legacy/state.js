@@ -5,9 +5,9 @@ let saveData = {
         unlockedIds: [1]
     };
 
-    if(localStorage.getItem("slime_gacha_save")) {
+    if(localStorage.getItem("malang3d_save")) {
         try {
-            saveData = JSON.parse(localStorage.getItem("slime_gacha_save"));
+            saveData = JSON.parse(localStorage.getItem("malang3d_save"));
         } catch(e) { console.error(e); }
     }
 
@@ -24,10 +24,12 @@ let saveData = {
         saveData.mySlimes = mySlimes;
         saveData.materials = materials;
         saveData.seenMats = seenMats;
-        saveData.currentSlimeId = currentSlime.id === "custom" ? "c:" + currentSlime.uid : currentSlime.id;
+        if (mySlimes.includes(currentSlime)) {
+            saveData.currentSlimeId = currentSlime.id === "custom" ? "c:" + currentSlime.uid : currentSlime.id;
+        }
         saveData.mileage = mileage;
         saveData.unlockedIds = unlockedIds;
-        localStorage.setItem("slime_gacha_save", JSON.stringify(saveData));
+        localStorage.setItem("malang3d_save", JSON.stringify(saveData));
     }
 
     let invTab = "slime";
@@ -275,7 +277,7 @@ let saveData = {
         openRenameModal(s.customName || spec.name, { kind: "slime", ref: s });
     }
 
-    let isInvCollapsed = false;
+    let isInvCollapsed = true;
     function toggleInventory() {
         isInvCollapsed = !isInvCollapsed;
         const container = document.getElementById("inventory-container");
@@ -623,6 +625,7 @@ let saveData = {
     ================================================================= */
     let audioCtx;
     function initAudio() {
+        if (window.malangMuted) return;
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
         loadCustomSounds();
@@ -673,6 +676,7 @@ let saveData = {
     }
 
     function playSquishSound(type = 'squish') {
+        if (window.malangMuted) return;
         if (!audioCtx) return;
         // 커스텀 음원이 등록돼 있으면 그걸 재생하고 종료
         if (playCustomSound(type)) return;
@@ -721,6 +725,7 @@ let saveData = {
     }
 
     function playCrackSound(isHeavy = false) {
+        if (window.malangMuted) return;
         if (!audioCtx) return;
         // 커스텀 음원 우선 (crack_heavy / crack_light)
         if (playCustomSound(isHeavy ? 'crack_heavy' : 'crack_light')) return;

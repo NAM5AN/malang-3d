@@ -13,7 +13,7 @@
     let stretchSmooth = 0; // 늘어남 정도(부드럽게 따라오는 값) → 투명도 연출용
 
     // 배경색 커스터마이즈 — 투명도를 체감할 수 있도록 사용자가 자유롭게 변경
-    let bgColor = localStorage.getItem("slime_bg_color") || "#f4eaef";
+    let bgColor = localStorage.getItem("malang3d_bg_color") || "#f4eaef";
     let bgFill = "rgba(244, 234, 239, 0.5)";
     function applyBgColor() {
         document.body.style.backgroundColor = bgColor;
@@ -91,7 +91,7 @@
                 + `border:3px solid ${sel ? '#ffeb3b' : 'rgba(255,255,255,0.4)'};box-sizing:border-box;`;
             sw.onclick = () => {
                 bgColor = c;
-                localStorage.setItem("slime_bg_color", bgColor);
+                localStorage.setItem("malang3d_bg_color", bgColor);
                 applyBgColor();
                 renderBgSwatches();
             };
@@ -222,6 +222,7 @@
     }
 
     function initSlime() {
+        window.malang3D?.cancelInteraction();
         {
             const sp = getSpec();
             numNodes = sp.shapePts ? sp.shapePts.length : (sp.nodeCount || 16); // 종별 노드 수 확정
@@ -426,6 +427,7 @@
     // 데미지 1회 (좌표 기반): 빈 자리면 겹치지 않는 랜덤 크기 금,
     // 금 간 조각을 건드리면 금 모양대로 낙하. 같은 제스처로는 한 조각에 한 번만.
     function damageWax(x, y, gseq) {
+        if (window.malang3D) return; // 3D surface picking and fracture live in WaxShell.
         const spec = getSpec();
         if (!waxIntact || spec.type !== "crack_wax") return;
         const radius = getRadius();
@@ -513,7 +515,6 @@
             if (L.chipScale) spec.chipScale = L.chipScale;
             spec.waxSparkle = !!L.sparkle;
             waxChips = [];        // 새 껍질이므로 금 초기화
-            totalCracks = 0;      // 깨짐 점수 리셋
             return;               // waxIntact 유지 (아직 껍질 있음)
         }
 
@@ -838,11 +839,13 @@
         c.restore();
     }
 
-    function animate() {
+    function simulateFrame() {
         const spec = getSpec();
         
-        ctx.fillStyle = bgFill;
-        ctx.fillRect(0, 0, width, height);
+        if (!window.malang3D) {
+            ctx.fillStyle = bgFill;
+            ctx.fillRect(0, 0, width, height);
+        }
         
         const k = waxIntact ? 0.28 : spec.k;       
         const damp = waxIntact ? 0.65 : spec.damping; 
@@ -1072,6 +1075,11 @@
         const stA = spec.stretchAlpha !== undefined ? spec.stretchAlpha : baseA;
         let bodyAlpha = showWaxShell ? 1 : (baseA + (stA - baseA) * stretchSmooth);
         if (spec.jelly && !showWaxShell) bodyAlpha = 0.42 + jellyCloud * 0.52; // 만질수록 탁해짐
+
+        if (window.malang3D) {
+            window.malang3D.onPhysicsStep({ spec, radius, bodyAlpha });
+            return;
+        }
 
         // 3-3. 본체를 오프스크린에 불투명하게 그린 뒤, 알파를 입혀 합성
         bodyCtx.clearRect(0, 0, width, height);
@@ -1406,6 +1414,19 @@
             }
         }
 
+    }
+
+    // Keep the original spring constants at 60 Hz on high-refresh and slow displays.
+    let previousFrame = 0, physicsRemainder = 0;
+    function animate(now = performance.now()) {
+        const dt = previousFrame ? Math.min((now - previousFrame) / 1000, 0.05) : 1 / 60;
+        previousFrame = now;
+        physicsRemainder += dt;
+        while (physicsRemainder >= 1 / 60) {
+            simulateFrame();
+            physicsRemainder -= 1 / 60;
+        }
+        window.malang3D?.renderFrame(dt);
         requestAnimationFrame(animate);
     }
 
