@@ -1,200 +1,180 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>말랑 스튜디오 · 3D 젤리 놀이터</title>
-    <meta name="description" content="49가지 말랑이의 개성을 그대로. 누르고 늘리고 돌려보는 나만의 3D 젤리 놀이터.">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Cpath fill=%27%239e85ec%27 d=%27M8 42C3 20 20 10 31 14s27 7 25 26S14 64 8 42%27/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <header class="studio-header">
-      <a class="brand" href="./" aria-label="말랑 스튜디오 홈"><span class="brand-mark">m</span><span>말랑<span class="brand-light"> 스튜디오</span><small>YOUR LITTLE JELLY UNIVERSE</small></span></a>
-      <nav class="header-actions" aria-label="스튜디오 메뉴"><span class="edition">3D PLAYGROUND</span><button id="soundToggle" class="icon-button" aria-label="소리 끄기" title="소리 켜기 / 끄기">♫</button><button id="helpToggle" class="icon-button" aria-label="사용 방법">?</button></nav>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f3f1ea" />
+    <meta
+      name="description"
+      content="촉촉한 젤리부터 바삭한 왁뿌볼까지. 손끝에서 출렁이는 49가지 말랑이를 만나 보세요."
+    />
+    <title>말랑 — 손끝에 작은 쉼</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect x='4' y='9' width='52' height='45' rx='23' fill='%238bb39e'/%3E%3Cellipse cx='23' cy='22' rx='10' ry='5' fill='%23c9e4d7'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="말랑 홈"
+        ><span class="brand-mark"></span><b>말랑</b
+        ><span class="brand-note">손끝에 작은 쉼</span></a
+      >
+      <div class="header-actions">
+        <span class="wallet" title="말랑이를 만지면 솜을 모을 수 있어요"
+          ><span>✳</span> <b id="coins">180</b><small>솜</small></span
+        ><button class="quiet icon-button" id="sound" aria-label="소리 끄기">
+          ♫</button
+        ><button class="quiet icon-button" id="help" aria-label="놀이 방법">
+          ?
+        </button>
+      </div>
     </header>
-    <div class="intro"><div class="eyebrow">A SOFT LITTLE BREAK</div><h1>손끝에서, <em>말랑.</em></h1><p>아무 생각 없이, 마음 가는 대로 만져보세요.</p></div>
-    <aside class="collection-panel" aria-label="말랑이 선택">
-      <div class="panel-heading"><h2>오늘의 말랑이</h2><span>49</span></div>
-      <label class="search-field"><span>⌕</span><input id="slimeSearch" type="search" placeholder="어떤 말랑이를 찾나요?" aria-label="말랑이 이름 검색"></label>
-      <div class="category-tabs" role="group" aria-label="질감별 보기"><button class="selected" data-filter="all">전체</button><button data-filter="jelly">젤리</button><button data-filter="wax">왁스</button><button data-filter="foam">폼·솜</button></div>
-      <div id="studioCatalog" class="catalog-list"></div>
-      <p class="collection-footnote">모든 말랑이를 자유롭게 체험해 보세요.</p>
-    </aside>
-    <main id="studioViewport" aria-label="3D 말랑이 놀이터"><canvas id="threeCanvas" aria-label="말랑이: 누르고 끌어서 늘리기. 둘러보기 버튼으로 회전하기." tabindex="0"></canvas><div id="loadingState">말랑이를 깨우는 중<span>잠시만 기다려 주세요</span></div></main>
-    <aside class="material-panel" aria-label="현재 말랑이의 특징">
-      <span class="eyebrow">MEET YOUR MALANG</span><div class="material-title"><span id="materialGrade">C</span><h2 id="materialName">물젤리 슬랑이</h2></div>
-      <p id="materialDescription">촉촉하고 쫀득한 젤리</p><div id="materialTags" class="trait-tags"></div>
-      <div class="property"><span>탄성</span><div><i id="elasticBar"></i></div><b id="elasticLabel"></b></div>
-      <div class="property"><span>투명도</span><div><i id="clearBar"></i></div><b id="clearLabel"></b></div>
-      <div class="property"><span>광택</span><div><i id="glossBar"></i></div><b id="glossLabel"></b></div>
-      <div id="waxStatus" class="wax-status" hidden></div>
-      <div class="scene-options"><span>오늘의 분위기</span><div><button class="scene-color selected" data-background="#f4eaef" style="--swatch:#f4eaef" aria-label="포근한 로즈 배경"></button><button class="scene-color" data-background="#e3ddf7" style="--swatch:#e3ddf7" aria-label="라벤더 배경"></button><button class="scene-color" data-background="#d1f5e0" style="--swatch:#d1f5e0" aria-label="민트 배경"></button><button class="scene-color" data-background="#1e2a4a" style="--swatch:#1e2a4a" aria-label="밤하늘 배경"></button></div></div>
-      <button id="qualityToggle" class="quality-button" aria-pressed="false">화질 · 균형</button>
-    </aside>
-    <div class="stage-caption"><span id="previewBadge">나의 말랑이</span><h2 id="stageName">물젤리 슬랑이</h2><p id="interactionHint">꾹 누르고, 쭉 늘려보세요</p></div>
-    <div class="play-tools" role="group" aria-label="말랑이 조작"><button id="touchMode" class="selected" aria-pressed="true">☝ 만지기</button><button id="orbitMode" aria-pressed="false">◎ 둘러보기</button><span></span><button id="resetSlime" title="현재 말랑이를 원래 상태로">↺ 다시 꺼내기</button><button id="resetCamera" title="처음 시점으로">⌖ 시점</button></div>
-    <footer class="studio-footer"><span><i></i><span id="renderStatus">3D 스튜디오 준비 중</span></span><span>조금 더 느리게, 조금 더 말랑하게.</span></footer>
-    <dialog id="helpDialog"><button id="closeHelp" class="dialog-close" aria-label="닫기">×</button><span class="eyebrow">HOW TO PLAY</span><h2>마음껏 만져보세요.</h2><p><b>만지기</b> · 꾹 누르면 움푹, 가장자리를 끌면 쭈욱 늘어나요. 두 손가락으로 양쪽을 잡을 수도 있어요.</p><p><b>둘러보기</b> · 드래그로 회전하고, 휠이나 두 손가락으로 확대해요.</p><p><b>왁스</b> · 같은 자리를 다시 눌러 껍질을 깨보세요. 두꺼운 코팅은 더 여러 번 눌러야 해요.</p><p><b>나만의 말랑이</b> · 가방, 뽑기, 상점, 꾸미기는 아래 메뉴에서 열어요. 체험은 보유 목록을 바꾸지 않아요.</p><p class="keyboard-help">키보드: Space 출렁 · R 다시 꺼내기 · V 조작 전환 · 방향키 시점 회전 · Esc 닫기</p></dialog>
-
-
-    <!-- 고무/액체 효과용 SVG 필터 -->
-    <svg width="0" height="0" style="position: absolute; z-index: -1;">
-        <defs>
-            <filter id="gooey">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur" />
-                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 25 -10" result="gooey" />
-                <feComposite in="SourceGraphic" in2="gooey" operator="atop"/>
-            </filter>
-            <!-- 정밀 모양(SVG 커스텀)용: 블러가 작아 오목한 노치/커스프가 안 메워짐 -->
-            <filter id="gooeyFine">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
-                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 25 -10" result="gooey" />
-                <feComposite in="SourceGraphic" in2="gooey" operator="atop"/>
-            </filter>
-        </defs>
-    </svg>
-
-    <canvas id="slimeCanvas"></canvas>
-    
-    <div id="ui">
-        <div id="inventory-container" class="collapsed">
-            <button class="btn" style="background:#795548; margin-right:6px; padding:10px 12px;" onclick="respawnSlime()" title="슬라임 다시 꺼내기">🔄</button><button class="btn btn-sub" id="toggleInvBtn" onclick="toggleInventory()">🎒 내 가방</button>
-            <div id="mileage-box">✨ 마일리지: <span id="mileageText">0</span></div>
-            <div id="inventory">
-                <div style="display:flex; gap:6px; margin-bottom:8px; justify-content:center;">
-                    <button class="btn" id="tabSlime" style="padding:6px 14px; font-size:12px;" onclick="setInvTab('slime')">🧪 슬라임</button>
-                    <button class="btn" id="tabMat" style="padding:6px 14px; font-size:12px; background:#777;" onclick="setInvTab('mat')">🧺 재료</button>
-                </div>
-                <div id="slimeList"></div>
-                <div id="matList" style="display:none;"></div>
+    <div class="workspace">
+      <aside class="collection-panel" id="collection-panel">
+        <button class="mobile-drawer" id="drawer-toggle" aria-expanded="false">
+          내 말랑이 <span id="mobile-count"></span
+          ><span class="chevron">⌃</span>
+        </button>
+        <div class="collection-inner">
+          <div class="panel-title">
+            <h2>오늘은 어떤 촉감?</h2>
+            <span id="owned-count"></span>
+          </div>
+          <div class="tabs" role="tablist" aria-label="말랑이 모음">
+            <button
+              id="tab-owned"
+              class="active"
+              role="tab"
+              aria-selected="true"
+            >
+              내 말랑이</button
+            ><button id="tab-book" role="tab" aria-selected="false">
+              도감 <small>49</small>
+            </button>
+          </div>
+          <label class="search"
+            ><span>⌕</span
+            ><input
+              id="search"
+              type="search"
+              placeholder="이름이나 촉감 찾기"
+              aria-label="말랑이 검색"
+          /></label>
+          <div class="filter-row">
+            <button class="active" data-filter="all">전체</button
+            ><button data-filter="jelly">젤리</button
+            ><button data-filter="wax">왁스</button
+            ><button data-filter="slow">반죽·솜</button>
+          </div>
+          <p class="book-note" id="book-note" hidden>
+            아직 만나지 못한 친구도 미리 만져볼 수 있어요.
+          </p>
+          <div
+            class="slime-list"
+            id="slime-list"
+            role="list"
+            aria-label="말랑이 목록"
+          ></div>
+          <div class="panel-bottom">
+            <button id="draw" class="primary">
+              <span>새 친구 만나기</span><small>✳ 40</small>
+            </button>
+            <div class="secondary-row">
+              <button id="craft" class="quiet">✧ 나만의 말랑이</button
+              ><button id="shop" class="quiet">재료 상점 ↗</button>
             </div>
+          </div>
         </div>
-    </div>
-    
-    <!-- 우측 하단 플로팅 액션 버튼 (누르면 뽑기/상점/꾸미기 부채꼴 펼침) -->
-    <div id="fab-wrap" class="open">
-        <button class="fab-action" id="fab-gacha" onclick="fabAct(startGacha)" title="뽑기"><span>🎁</span> 뽑기</button>
-        <button class="fab-action" id="fab-shop" onclick="fabAct(openShop)" title="상점"><span>🛒</span> 상점</button>
-        <button class="fab-action" id="fab-custom" onclick="fabAct(openCustomize)" title="꾸미기"><span>🧪</span> 꾸미기</button>
-        <button class="fab-action" id="fab-book" onclick="fabAct(openBook)" title="도감"><span>📖</span> 도감</button>
-        <button class="fab-action" id="fab-bg" onclick="fabAct(openBgModal)" title="배경색"><span>🎨</span> 배경</button>
-        <button class="fab-action" id="fab-fs" onclick="fabAct(toggleFullscreen)" title="전체화면"><span>🖥️</span> 전체화면</button>
-        <button class="fab-main" id="fab-main" onclick="toggleFab()">➕</button>
-    </div>
-
-    <div id="toast" style="position:absolute; bottom:90px; left:50%; transform:translateX(-50%); background:rgba(40,40,48,0.95); color:#fff; padding:10px 22px; border-radius:20px; font-size:14px; z-index:300; display:none; box-shadow:0 4px 12px rgba(0,0,0,0.35); pointer-events:none; text-align:center; max-width:80%;"></div>
-
-
-
-    <!-- 가챠 모달 -->
-    <div id="gachaModal" class="modal-overlay">
-        <div class="modal-card" id="gachaCard" style="width: 320px; min-height: 235px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-            <div id="ad-box" style="margin-bottom:15px; color:#aaa;">상자를 여는 중... (1초)</div>
-            <h1 id="gachaResult"></h1>
-            <p id="gachaSubResult"></p>
-            <button class="btn" id="closeGachaBtn" style="display:none; margin-top:15px;" onclick="closeGacha()">확인</button>
+      </aside>
+      <main class="play-area">
+        <div id="stage" class="stage"></div>
+        <div class="slime-heading">
+          <div class="eyebrow">
+            <span id="grade" class="grade">COMMON</span
+            ><span id="preview-badge" hidden>미리 만져보기</span
+            ><span id="level"></span>
+          </div>
+          <h1 id="slime-name">물젤리 슬랑이</h1>
+          <p id="slime-description"></p>
+          <div class="trait-tags" id="traits"></div>
         </div>
-    </div>
-
-    <!-- 도감 모달 -->
-    <div id="bookModal" class="modal-overlay">
-        <div class="modal-card" style="width: 320px;">
-            <h2>📖 도감</h2>
-            <div style="display:flex; gap:6px; justify-content:center; margin-bottom:8px;">
-                <button class="btn" id="bookTabSlime" style="padding:6px 14px; font-size:12px;" onclick="setBookTab('slime')">🧪 슬라임</button>
-                <button class="btn" id="bookTabMat" style="padding:6px 14px; font-size:12px; background:#777;" onclick="setBookTab('mat')">🧺 재료</button>
-            </div>
-            <div id="bookProgress" style="color:#ffeb3b; margin-bottom:10px;">0% 달성</div>
-            <div class="grid" id="bookGrid"></div>
-            <button class="btn" style="background:#555;" onclick="closeBook()">닫기</button>
+        <div class="stage-tools">
+          <button
+            class="round-tool"
+            id="reset"
+            aria-label="말랑이 모양 초기화"
+            title="처음 모양으로"
+          >
+            ↺</button
+          ><button
+            class="round-tool"
+            id="camera"
+            aria-label="시점 초기화"
+            title="시점 되돌리기"
+          >
+            ⌖</button
+          ><button
+            class="round-tool"
+            id="manage"
+            aria-label="이름과 보관 관리"
+            title="이름과 보관 관리"
+          >
+            ···
+          </button>
         </div>
-    </div>
-
-    <!-- 상점 모달 -->
-    <div id="shopModal" class="modal-overlay">
-        <div class="modal-card" style="width: 320px;">
-            <h2>🛒 슬라임 상점</h2>
-            <div id="shopMileage" style="color:#ffeb3b; margin-bottom:10px;"></div>
-            <div style="display:flex; gap:6px; justify-content:center; margin-bottom:10px;">
-                <button class="btn" id="shopTabSlime" style="padding:6px 14px; font-size:12px;" onclick="setShopTab('slime')">🧪 슬라임</button>
-                <button class="btn" id="shopTabMat" style="padding:6px 14px; font-size:12px; background:#777;" onclick="setShopTab('mat')">🧺 재료</button>
-            </div>
-            <div class="grid" id="shopGrid"></div>
-            <button class="btn" style="background:#555;" onclick="closeShop()">닫기</button>
+        <div class="feel-note" id="feel-note" aria-live="polite"></div>
+        <div class="stage-footer">
+          <div class="play-hint">
+            <span class="hint-icon">↔</span>
+            <p>
+              <b>잡고, 늘리고, 놓아 보세요.</b
+              ><span>두 손가락으로 양쪽을 늘릴 수도 있어요.</span>
+            </p>
+            <button id="poke" class="poke-button">꾸욱 눌러보기</button>
+          </div>
+          <div class="backgrounds" role="group" aria-label="배경 색">
+            <button
+              data-bg="cream"
+              class="active"
+              aria-label="크림 배경"
+              style="--swatch: #ded9ca"
+            ></button
+            ><button
+              data-bg="rose"
+              aria-label="분홍 배경"
+              style="--swatch: #dcb8be"
+            ></button
+            ><button
+              data-bg="mint"
+              aria-label="민트 배경"
+              style="--swatch: #aec5b0"
+            ></button
+            ><button
+              data-bg="night"
+              aria-label="밤 배경"
+              style="--swatch: #454b5d"
+            ></button>
+          </div>
         </div>
-    </div>
-
-    <!-- 꾸미기 모달 -->
-    <div id="customModal" class="modal-overlay">
-        <div class="modal-card" style="width: 330px; max-height: 82vh; overflow-y: auto;">
-            <h2>🧪 슬라임 꾸미기</h2>
-            <div style="text-align:left; font-size:13px; color:#ffd54a; margin:6px 0;">① 베이스 선택</div>
-            <div id="custBaseList" style="max-height:24vh; overflow-y:auto; margin-bottom:10px; text-align:left; padding:2px;"></div>
-            <div id="custLvRow" style="display:none; margin-bottom:10px;">
-                <span style="font-size:13px;">사용 레벨: </span>
-                <button class="btn" style="padding:4px 12px; font-size:14px;" onclick="custLv(-1)">−</button>
-                <b id="custLvText" style="margin:0 10px;">1</b>
-                <button class="btn" style="padding:4px 12px; font-size:14px;" onclick="custLv(1)">＋</button>
-                <span id="custLvMax" style="font-size:11px; color:#999;"></span>
-            </div>
-            <div style="text-align:left; font-size:13px; color:#ffd54a; margin:6px 0;">② 재료 넣기 (보유 재료)</div>
-            <div id="custMatList" style="margin-bottom:12px;"></div>
-            <button class="btn" style="background:#00acc1;" onclick="createCustomSlime()">✨ 만들기</button>
-            <button class="btn" style="background:#555;" onclick="closeCustomize()">닫기</button>
+        <div id="loading" class="loading">
+          말랑한 시간을 준비하고 있어요<span></span>
         </div>
+      </main>
     </div>
-
-    <!-- 이름 변경 모달 -->
-    <div id="renameModal" class="modal-overlay">
-        <div class="modal-card" style="width: 300px;">
-            <h2>✏️ 이름 변경</h2>
-            <input type="text" id="renameInput" maxlength="20" style="width:90%; padding:10px; border-radius:10px; border:2px solid #ff80ab; font-size:15px; text-align:center; margin:10px 0;">
-            <div style="display:flex; gap:8px;">
-                <button class="btn" style="background:#888; flex:1;" onclick="closeRenameModal()">취소</button>
-                <button class="btn" style="background:#4caf50; flex:1;" onclick="applyRename()">확인</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 확인(삭제 등) 모달 -->
-    <div id="confirmModal" class="modal-overlay">
-        <div class="modal-card" style="width: 300px;">
-            <h2 id="confirmTitle">확인</h2>
-            <p id="confirmMsg" style="font-size:13px; color:#ddd; margin:10px 0 16px; white-space:pre-line;"></p>
-            <div style="display:flex; gap:8px;">
-                <button class="btn" style="background:#888; flex:1;" onclick="closeConfirmModal(false)">취소</button>
-                <button class="btn" id="confirmOkBtn" style="background:#e53950; flex:1;" onclick="closeConfirmModal(true)">삭제</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 미리보기 확인 모달 (뒤 캔버스에 실물 렌더가 보임) -->
-    <div id="previewModal" class="modal-overlay" style="background: transparent; pointer-events: none; justify-content: flex-end;">
-        <div class="modal-card" style="width: 300px; margin-bottom: 30px; pointer-events: auto;">
-            <h2>이렇게 만들까요?</h2>
-            <p style="font-size:12px; color:#ccc; margin:4px 0 14px;">위 슬라임을 직접 만져볼 수 있어요.<br>완성하면 베이스 레벨과 재료가 소모됩니다.</p>
-            <div style="display:flex; gap:8px;">
-                <button class="btn" style="background:#888; flex:1;" onclick="cancelPreview()">🔄 다시 만들기</button>
-                <button class="btn" style="background:#00acc1; flex:1;" onclick="confirmCustomSlime()">✅ 완성하기</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 배경색 모달 (뒤가 살짝 비쳐 색을 바로 확인 가능) -->
-    <div id="bgModal" class="modal-overlay" style="background: rgba(0,0,0,0.35);" onclick="if(event.target===this)closeBgModal()">
-        <div class="modal-card" style="width: 290px;">
-            <h2>🎨 배경색 설정</h2>
-            <div id="bgSwatches" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:8px 0 16px; justify-items:center;"></div>
-            <button class="btn" style="background:#555;" onclick="closeBgModal()">닫기</button>
-        </div>
-    </div>
-
-<script src="%BASE_URL%legacy/data.js"></script>
-<script src="%BASE_URL%legacy/state.js"></script>
-<script src="%BASE_URL%legacy/engine.js"></script>
-<script src="%BASE_URL%legacy/input.js"></script>
-<script src="%BASE_URL%legacy/bridge.js"></script>
-<script type="module" src="/src/main.js"></script>
-</body>
+    <div class="toast" id="toast" role="status"></div>
+    <dialog id="modal">
+      <div class="modal-top">
+        <span class="modal-kicker" id="modal-kicker">MALANG STUDIO</span
+        ><button class="quiet close" id="close-modal" aria-label="닫기">
+          ×
+        </button>
+      </div>
+      <div id="modal-content"></div>
+    </dialog>
+    <script type="module" src="/src/app.js"></script>
+  </body>
 </html>

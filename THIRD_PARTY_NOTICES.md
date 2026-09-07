@@ -1,19 +1,19 @@
-# 외부 소프트웨어 및 출처
+# 출처 및 외부 소프트웨어
 
-## 기반 프로젝트
+## 원작 기획
 
-NAM5AN/malang — https://github.com/NAM5AN/malang
-
-원본 게임과 데이터, 수집 및 꾸미기 시스템, 물성 및 효과음을 기반으로 합니다. 원본 저장소의 이력을 유지합니다. 원본에 없던 라이선스를 전체 프로젝트에 임의로 적용하지 않습니다.
+[NAM5AN/malang](https://github.com/NAM5AN/malang)의 49종 이름·색·촉감과 수집·꾸미기 기획을 참고합니다. v2는 원작 및 이전 3D 버전의 런타임 코드를 재사용하지 않고 새로 작성했습니다. Git 이력에는 이전 버전이 남아 있습니다. 원작에 없던 라이선스를 전체 프로젝트에 임의로 적용하지 않습니다.
 
 ## Three.js
 
-Three.js 0.185.1, RoomEnvironment, OrbitControls, BufferGeometryUtils.
+Three.js 0.185.1, RoomEnvironment, OrbitControls — [저장소](https://github.com/mrdoob/three.js).
 
-https://github.com/mrdoob/three.js
+MIT License. 전체 고지는 `public/licenses/three-LICENSE.txt`에 포함되어 배포물에도 복사됩니다.
 
-MIT License. 전체 고지는 `public/licenses/three-LICENSE.txt`에 포함되어 정적 배포물에도 복사됩니다.
+## 참고한 수학과 작업물
 
-## 왁스 참고 작업물
+[XPBD 및 연체 튜토리얼](docs/SOFT_BODY.md), [실제 왁뿌볼 코드 참고 기록](docs/WAX_REFERENCES.md). 참고 작업물의 소스와 자산을 복사하거나 번들에 포함하지 않습니다.
 
-`seongwoochikin-dev/wakppuball`, `jibeommm/wakppu-ball`의 공개 코드를 읽고 동작 구조를 연구했습니다. 소스 및 자산의 복사·번들링은 하지 않았습니다. 상세 사항은 [참고 기록](docs/WAX_REFERENCES.md)을 보세요.
+## 글꼴
+
+Noto Sans KR을 Google Fonts 스타일시트로 불러옵니다. 글꼴 요청이 불가능한 환경에서는 시스템 한글 글꼴을 사용합니다. Noto 글꼴은 SIL Open Font License로 제공됩니다. 글꼴 바이너리는 저장소에 포함하지 않습니다.
