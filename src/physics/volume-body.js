@@ -72,8 +72,13 @@ export function signedVolume(p, a, b, c, d) {
 export class VolumeBody {
   constructor(profile = {}, shape = "round", divisions = 5) {
     this.profile = {
-      compliance: 0.0005,
-      drag: 3,
+      compliance: 0.003,
+      volumeCompliance: 1e-7,
+      grabCompliance: 0.000008,
+      drag: 1.4,
+      friction: 3,
+      reach: 2.5,
+      pressDepth: 0.38,
       plastic: 0,
       stretch: 1.85,
       bounce: 0.04,
@@ -129,6 +134,8 @@ export class VolumeBody {
           }
         }
     this.tets = new Uint16Array(tet);
+    this.bulkGradient = new Float64Array(positions.length);
+    this.bulkLambda = 0;
     this.volumes = Float64Array.from({ length: tet.length / 4 }, (_, i) =>
       signedVolume(this.rest, ...tet.slice(i * 4, i * 4 + 4)),
     );
@@ -153,15 +160,6 @@ export class VolumeBody {
   }
 
   grab(id, point, normal = [0, 0, 1], radius = 0.75) {
-    if (!this.handles.size) {
-      this.tableGrip = [];
-      for (let i = 0; i < this.count; i++)
-        if (this.position[i * 3 + 1] < 0.24)
-          this.tableGrip.push({
-            i: i * 3,
-            point: Array.from(this.position.slice(i * 3, i * 3 + 3)),
-          });
-    }
     const nodes = [];
     for (let i = 0; i < this.count; i++) {
       const k = i * 3,
@@ -185,6 +183,7 @@ export class VolumeBody {
       target: [...point],
       current: [...point],
       normal: [...normal],
+      pressure: 0,
       nodes,
     });
     return nodes.length;
@@ -194,7 +193,7 @@ export class VolumeBody {
     const h = this.handles.get(id);
     if (!h) return;
     const d = target.map((v, k) => v - h.point[k]);
-    const reach = 0.55 + this.profile.stretch * 0.45;
+    const reach = this.profile.reach;
     const scale = Math.min(1, reach / Math.max(1e-8, Math.hypot(...d)));
     h.target = h.point.map((v, k) => v + d[k] * scale);
   }
@@ -215,30 +214,19 @@ export class VolumeBody {
   solveHandles(h) {
     for (const handle of this.handles.values())
       for (const node of handle.nodes) {
-        const alpha = 0.000025 / (h * h * node.weight);
+        const alpha = this.profile.grabCompliance / (h * h * node.weight);
         for (let k = 0; k < 3; k++) {
           const goal =
             node.start[k] +
-            (handle.current[k] - handle.point[k] - 0.2 * handle.normal[k]) *
-              node.weight;
+            (handle.current[k] -
+              handle.point[k] -
+              handle.pressure * handle.normal[k]) *
+              Math.sqrt(node.weight);
           const c = this.position[node.i + k] - goal;
           const dl = (-c - alpha * node.lambda[k]) / (1 + alpha);
           node.lambda[k] += dl;
           this.position[node.i + k] += dl;
         }
-      }
-    // Contact adhesion supplies the counterforce of a jelly resting on a table.
-    // The bouncy ball remains free to lift off. Other materials can still slide.
-    if (this.handles.size === 1 && this.profile.bounce < 0.5)
-      for (const contact of this.tableGrip || []) {
-        const alpha = 0.00002 / (h * h);
-        for (const k of [0, 2])
-          this.position[contact.i + k] +=
-            (contact.point[k] - this.position[contact.i + k]) / (1 + alpha);
-        this.position[contact.i + 1] +=
-          (Math.min(contact.point[1] + 0.05, this.position[contact.i + 1]) -
-            this.position[contact.i + 1]) *
-          0.15;
       }
   }
 
@@ -259,7 +247,7 @@ export class VolumeBody {
       // A hard strain envelope prevents a local thin neck, even for fast pointer jumps.
       const limit = clamp(
         l + 2 * dl,
-        rest * 0.55,
+        rest * 0.35,
         this.originalLengths[e] * this.profile.stretch,
       );
       dl = (limit - l) / 2 / l;
@@ -314,10 +302,14 @@ export class VolumeBody {
         dx * dx +
         dy * dy +
         dz * dz;
-      // Equality to rest volume supplies pressure throughout the solid interior.
-      const alpha = 1e-10 / (h * h);
+      // Compliant local volumes allow material to redistribute under pressure.
+      // A separate bulk constraint retains the total volume without tet locking.
+      const barrier = volume < this.volumes[t] * 0.24;
+      const alpha = barrier ? 0 : this.profile.volumeCompliance / (h * h);
+      if (barrier) this.volumeLambda[t] = 0;
       const dl =
-        (-(volume - this.volumes[t]) - alpha * this.volumeLambda[t]) /
+        (-(volume - this.volumes[t] * (barrier ? 0.24 : 1)) -
+          alpha * this.volumeLambda[t]) /
         (w + alpha);
       this.volumeLambda[t] += dl;
       p[a] += ax * dl;
@@ -335,6 +327,60 @@ export class VolumeBody {
     }
   }
 
+  solveBulk(h) {
+    const p = this.position,
+      g = this.bulkGradient;
+    g.fill(0);
+    let volume = 0;
+    // Sum the same oriented elements as the local constraints and restVolume.
+    // Removing every shared face is not equivalent after a shaped cage's
+    // individual tetrahedra have had their rest orientation corrected.
+    for (let t = 0; t < this.tets.length; t += 4) {
+      const a = this.tets[t] * 3,
+        b = this.tets[t + 1] * 3,
+        c = this.tets[t + 2] * 3,
+        d = this.tets[t + 3] * 3;
+      const ux = p[b] - p[a],
+        uy = p[b + 1] - p[a + 1],
+        uz = p[b + 2] - p[a + 2];
+      const vx = p[c] - p[a],
+        vy = p[c + 1] - p[a + 1],
+        vz = p[c + 2] - p[a + 2];
+      const wx = p[d] - p[a],
+        wy = p[d + 1] - p[a + 1],
+        wz = p[d + 2] - p[a + 2];
+      const bx = (vy * wz - vz * wy) / 6,
+        by = (vz * wx - vx * wz) / 6,
+        bz = (vx * wy - vy * wx) / 6;
+      const cx = (wy * uz - wz * uy) / 6,
+        cy = (wz * ux - wx * uz) / 6,
+        cz = (wx * uy - wy * ux) / 6;
+      const dx = (uy * vz - uz * vy) / 6,
+        dy = (uz * vx - ux * vz) / 6,
+        dz = (ux * vy - uy * vx) / 6;
+      volume += ux * bx + uy * by + uz * bz;
+      g[a] -= bx + cx + dx;
+      g[a + 1] -= by + cy + dy;
+      g[a + 2] -= bz + cz + dz;
+      g[b] += bx;
+      g[b + 1] += by;
+      g[b + 2] += bz;
+      g[c] += cx;
+      g[c + 1] += cy;
+      g[c + 2] += cz;
+      g[d] += dx;
+      g[d + 1] += dy;
+      g[d + 2] += dz;
+    }
+    let w = 0;
+    for (let i = 0; i < g.length; i++) w += g[i] * g[i];
+    const alpha = 1e-8 / (h * h);
+    const dl =
+      (-(volume - this.restVolume) - alpha * this.bulkLambda) / (w + alpha);
+    this.bulkLambda += dl;
+    for (let i = 0; i < p.length; i++) p[i] += g[i] * dl;
+  }
+
   step(dt = 1 / 60) {
     const substeps = 6,
       h = Math.min(dt, 1 / 30) / substeps,
@@ -349,18 +395,22 @@ export class VolumeBody {
         v[k] *= damping;
         v[k + 1] = v[k + 1] * damping - 4 * h;
         v[k + 2] *= damping;
-        // A weak horizontal spring keeps the toy within reach on the tabletop.
-        v[k] -= p[k] * 0.12 * h;
-        v[k + 2] -= p[k + 2] * 0.12 * h;
         for (let j = 0; j < 3; j++) p[k + j] += clamp(v[k + j], -8, 8) * h;
       }
       this.edgeLambda.fill(0);
       this.volumeLambda.fill(0);
+      this.bulkLambda = 0;
       for (const handle of this.handles.values()) {
+        // Build fingertip pressure over 100 ms instead of teleporting the surface
+        // inward on the first frame, which can jam thin character shapes.
+        handle.pressure = Math.min(
+          this.profile.pressDepth,
+          handle.pressure + (this.profile.pressDepth * h) / 0.1,
+        );
         const distance = Math.hypot(
           ...handle.target.map((v, k) => v - handle.current[k]),
         );
-        const fraction = Math.min(1, (5 * h) / Math.max(distance, 1e-8));
+        const fraction = Math.min(1, (9 * h) / Math.max(distance, 1e-8));
         for (let k = 0; k < 3; k++)
           handle.current[k] +=
             (handle.target[k] - handle.current[k]) * fraction;
@@ -370,6 +420,7 @@ export class VolumeBody {
         this.solveHandles(h);
         this.solveEdges(h);
         this.solveVolumes(h);
+        this.solveBulk(h);
         for (let i = 0; i < this.count; i++)
           p[i * 3 + 1] = Math.max(0.075, p[i * 3 + 1]);
       }
@@ -404,8 +455,9 @@ export class VolumeBody {
         for (let j = 0; j < 3; j++)
           v[k + j] = (p[k + j] - this.previous[k + j]) / h;
         if (p[k + 1] < 0.077) {
-          v[k] *= 0.93;
-          v[k + 2] *= 0.93;
+          const friction = Math.exp(-this.profile.friction * h);
+          v[k] *= friction;
+          v[k + 2] *= friction;
           v[k + 1] = Math.max(v[k + 1], -v[k + 1] * this.profile.bounce);
         }
       }

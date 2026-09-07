@@ -622,10 +622,11 @@ export class Studio {
       }
     }
     if (this.coating) {
-      const intact =
-        1 - this.coating.removed.size / this.coating.regions.length;
+      // Once a few connected pieces give way, pressure can escape through the
+      // opening. The filling should not stay rigid until nearly all wax is gone.
+      const yielded = Math.min(1, this.coating.removed.size / 4);
       this.body.profile.compliance =
-        this.baseCompliance * (1 - intact) + 0.00009 * intact;
+        this.baseCompliance * yielded + 0.00009 * (1 - yielded);
     }
     let steps = 0;
     while (this.accumulator >= 1 / 60 && steps < 3) {
