@@ -69,6 +69,16 @@ export function signedVolume(p, a, b, c, d) {
   );
 }
 
+function cagePoint(x, y, z, shape = "round") {
+  const visual = roundedCube(x, y, z, shape);
+  if (shape !== "gem") return visual;
+  // Keep the seven-lobed visual surface, but avoid sliver elements in the
+  // lower-resolution volume that can stall the inversion barrier when pulled.
+  return roundedCube(x, y, z).map(
+    (value, k) => value + (visual[k] - value) * 0.5,
+  );
+}
+
 export class VolumeBody {
   constructor(profile = {}, shape = "round", divisions = 5) {
     this.profile = {
@@ -95,7 +105,7 @@ export class VolumeBody {
       for (let y = 0; y < n; y++)
         for (let x = 0; x < n; x++)
           positions.push(
-            ...roundedCube(
+            ...cagePoint(
               (x / divisions) * 2 - 1,
               (y / divisions) * 2 - 1,
               (z / divisions) * 2 - 1,
@@ -153,13 +163,16 @@ export class VolumeBody {
     this.originalLengths = this.lengths.slice();
     this.edgeLambda = new Float64Array(this.lengths.length);
     this.volumeLambda = new Float64Array(this.volumes.length);
+    this.gripLambda = new Float64Array(positions.length);
+    this.gripGoals = new Float64Array(positions.length);
+    this.gripWeights = new Float64Array(positions.length / 3);
     this.handles = new Map();
     this.clock = 0;
     this.safetyRecoveries = 0;
     this.restVolume = this.volumes.reduce((a, b) => a + b, 0);
   }
 
-  grab(id, point, normal = [0, 0, 1], radius = 0.75) {
+  createGrip(point, normal, radius) {
     const nodes = [];
     for (let i = 0; i < this.count; i++) {
       const k = i * 3,
@@ -174,19 +187,27 @@ export class VolumeBody {
           i: k,
           weight,
           start: Array.from(this.position.slice(k, k + 3)),
-          lambda: [0, 0, 0],
         });
       }
     }
-    this.handles.set(id, {
+    return {
       point: [...point],
       target: [...point],
       current: [...point],
       normal: [...normal],
       pressure: 0,
       nodes,
-    });
-    return nodes.length;
+    };
+  }
+
+  grab(id, point, normal = [0, 0, 1], radius = 0.75, { stretch = false } = {}) {
+    const grip = this.createGrip(point, normal, radius);
+    grip.stretch = stretch && !!this.profile.pullStretch;
+    grip.pull = 0;
+    this.handles.set(id, grip);
+    // Two actual fingers supply their own opposing grips.
+    for (const handle of this.handles.values()) handle.support = null;
+    return grip.nodes.length;
   }
 
   move(id, target) {
@@ -196,6 +217,49 @@ export class VolumeBody {
     const reach = this.profile.reach;
     const scale = Math.min(1, reach / Math.max(1e-8, Math.hypot(...d)));
     h.target = h.point.map((v, k) => v + d[k] * scale);
+    if (!h.stretch) return;
+    const delta = h.target.map((v, k) => v - h.point[k]);
+    const distance = Math.hypot(...delta);
+    // A push into the surface remains a palm press. A lateral or outward drag
+    // becomes a pull; pressure no longer works against the moving fingertip.
+    const inward = Math.max(
+      0,
+      -delta.reduce((v, x, k) => v + x * h.normal[k], 0),
+    );
+    const travel = Math.sqrt(
+      Math.max(0, distance * distance - inward * inward),
+    );
+    h.pull = clamp((travel - 0.12) / 0.45, 0, 1);
+    if (h.pull === 0 || this.handles.size !== 1) {
+      h.support = null;
+      return;
+    }
+    if (!h.support) {
+      const direction = delta.map((v) => v / Math.max(distance, 1e-8));
+      const projections = Array.from({ length: this.count }, (_, i) =>
+        direction.reduce((sum, v, k) => sum + v * this.position[i * 3 + k], 0),
+      );
+      const low = Math.min(...projections),
+        high = Math.max(...projections);
+      const point = [0, 0, 0];
+      let count = 0;
+      for (let i = 0; i < this.count; i++)
+        if (projections[i] < low + (high - low) * 0.18) {
+          for (let k = 0; k < 3; k++) point[k] += this.position[i * 3 + k];
+          count++;
+        }
+      if (!count) return;
+      for (let k = 0; k < 3; k++) point[k] /= count;
+      h.support = this.createGrip(point, [0, 0, 0], 0.8);
+      h.support.startDelta = delta;
+    }
+    // A temporary supporting palm follows the gesture as well: there is no
+    // fixed world-space anchor, and release removes both contact constraints.
+    for (let k = 0; k < 3; k++)
+      h.support.target[k] =
+        h.support.point[k] +
+        (delta[k] - h.support.startDelta[k]) *
+          (this.profile.pullFollow ?? 0.16);
   }
   release(id) {
     this.handles.delete(id);
@@ -211,23 +275,42 @@ export class VolumeBody {
     this.releaseAll();
   }
 
-  solveHandles(h) {
-    for (const handle of this.handles.values())
+  prepareGrips() {
+    this.gripGoals.fill(0);
+    this.gripWeights.fill(0);
+    this.gripLambda.fill(0);
+    for (const handle of this.grips)
       for (const node of handle.nodes) {
-        const alpha = this.profile.grabCompliance / (h * h * node.weight);
+        this.gripWeights[node.i / 3] += node.weight;
         for (let k = 0; k < 3; k++) {
           const goal =
             node.start[k] +
             (handle.current[k] -
               handle.point[k] -
               handle.pressure * handle.normal[k]) *
-              Math.sqrt(node.weight);
-          const c = this.position[node.i + k] - goal;
-          const dl = (-c - alpha * node.lambda[k]) / (1 + alpha);
-          node.lambda[k] += dl;
-          this.position[node.i + k] += dl;
+              (Math.sqrt(node.weight) +
+                (1 - Math.sqrt(node.weight)) *
+                  (handle.pull || 0) *
+                  (this.profile.pullGrip ?? 1));
+          this.gripGoals[node.i + k] += goal * node.weight;
         }
       }
+  }
+
+  solveHandles(h) {
+    // Overlapping fingers share one blended target per particle. Solving two
+    // contradictory position targets in sequence can jam the volume barrier.
+    for (let i = 0; i < this.count; i++) {
+      const weight = this.gripWeights[i];
+      if (!weight) continue;
+      const alpha = this.profile.grabCompliance / (h * h * weight);
+      for (let k = i * 3; k < i * 3 + 3; k++) {
+        const c = this.position[k] - this.gripGoals[k] / weight;
+        const dl = (-c - alpha * this.gripLambda[k]) / (1 + alpha);
+        this.gripLambda[k] += dl;
+        this.position[k] += dl;
+      }
+    }
   }
 
   solveEdges(h) {
@@ -248,7 +331,7 @@ export class VolumeBody {
       const limit = clamp(
         l + 2 * dl,
         rest * 0.35,
-        this.originalLengths[e] * this.profile.stretch,
+        this.originalLengths[e] * this.strainLimit,
       );
       dl = (limit - l) / 2 / l;
       p[a] += x * dl;
@@ -260,7 +343,7 @@ export class VolumeBody {
     }
   }
 
-  solveVolumes(h) {
+  solveVolumes(h, barrierOnly = false) {
     const p = this.position;
     for (let t = 0; t < this.volumes.length; t++) {
       const a = this.tets[t * 4] * 3,
@@ -305,6 +388,7 @@ export class VolumeBody {
       // Compliant local volumes allow material to redistribute under pressure.
       // A separate bulk constraint retains the total volume without tet locking.
       const barrier = volume < this.volumes[t] * 0.24;
+      if (barrierOnly && !barrier) continue;
       const alpha = barrier ? 0 : this.profile.volumeCompliance / (h * h);
       if (barrier) this.volumeLambda[t] = 0;
       const dl =
@@ -386,6 +470,21 @@ export class VolumeBody {
       h = Math.min(dt, 1 / 30) / substeps,
       p = this.position,
       v = this.velocity;
+    this.grips = [];
+    this.strainLimit = this.profile.stretch;
+    for (const handle of this.handles.values()) {
+      this.grips.push(handle);
+      if (handle.pull)
+        this.strainLimit = Math.max(
+          this.strainLimit,
+          this.profile.stretch +
+            (this.profile.pullStretch - this.profile.stretch) * handle.pull,
+        );
+      if (handle.support && this.handles.size === 1) {
+        handle.support.pull = handle.pull;
+        this.grips.push(handle.support);
+      }
+    }
     for (let s = 0; s < substeps; s++) {
       this.safe.set(p);
       this.previous.set(p);
@@ -400,12 +499,14 @@ export class VolumeBody {
       this.edgeLambda.fill(0);
       this.volumeLambda.fill(0);
       this.bulkLambda = 0;
-      for (const handle of this.handles.values()) {
+      for (const handle of this.grips) {
         // Build fingertip pressure over 100 ms instead of teleporting the surface
         // inward on the first frame, which can jam thin character shapes.
-        handle.pressure = Math.min(
-          this.profile.pressDepth,
-          handle.pressure + (this.profile.pressDepth * h) / 0.1,
+        const pressure = this.profile.pressDepth * (1 - (handle.pull || 0));
+        handle.pressure += clamp(
+          pressure - handle.pressure,
+          -(this.profile.pressDepth * h) / 0.1,
+          (this.profile.pressDepth * h) / 0.1,
         );
         const distance = Math.hypot(
           ...handle.target.map((v, k) => v - handle.current[k]),
@@ -414,8 +515,8 @@ export class VolumeBody {
         for (let k = 0; k < 3; k++)
           handle.current[k] +=
             (handle.target[k] - handle.current[k]) * fraction;
-        for (const node of handle.nodes) node.lambda.fill(0);
       }
+      this.prepareGrips();
       for (let iteration = 0; iteration < 3; iteration++) {
         this.solveHandles(h);
         this.solveEdges(h);
@@ -423,6 +524,15 @@ export class VolumeBody {
         this.solveBulk(h);
         for (let i = 0; i < this.count; i++)
           p[i * 3 + 1] = Math.max(0.075, p[i * 3 + 1]);
+      }
+      // Bulk preservation and floor contact can squeeze a small element again
+      // after its local volume solve. Finish with the inequality barrier so a
+      // released grip cannot leave the entire body stuck at the backtrack limit.
+      for (let iteration = 0; iteration < 3; iteration++) {
+        this.solveVolumes(h, true);
+        if (iteration < 2)
+          for (let i = 0; i < this.count; i++)
+            p[i * 3 + 1] = Math.max(0.075, p[i * 3 + 1]);
       }
       // Backtrack a substep instead of allowing an inverted tetrahedron to propagate.
       let valid = false;
@@ -549,6 +659,7 @@ export class VolumeBody {
 // All weights are positive; a cursor never pulls a visible vertex directly.
 export function skinBinding(body, q) {
   const rest = roundedCube(...q, body.shape),
+    query = cagePoint(...q, body.shape),
     indices = [],
     weights = [];
   let sum = 0;
@@ -556,9 +667,9 @@ export function skinBinding(body, q) {
     const k = i * 3,
       r =
         Math.hypot(
-          body.rest[k] - rest[0],
-          body.rest[k + 1] - rest[1],
-          body.rest[k + 2] - rest[2],
+          body.rest[k] - query[0],
+          body.rest[k + 1] - query[1],
+          body.rest[k + 2] - query[2],
         ) / 0.95;
     if (r >= 1) continue;
     const w = (1 - r) ** 4 * (4 * r + 1);

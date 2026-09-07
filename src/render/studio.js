@@ -167,7 +167,16 @@ export class Studio {
       h = this.container.clientHeight;
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
-    this.camera.fov = w < 600 ? 46 : 37;
+    // Reserve horizontal room for a long pull on portrait screens.
+    this.camera.fov =
+      w < 600
+        ? THREE.MathUtils.radToDeg(
+            2 *
+              Math.atan(
+                Math.tan(THREE.MathUtils.degToRad(25)) / Math.min(1, w / h),
+              ),
+          )
+        : 37;
     this.camera.updateProjectionMatrix();
   }
   select(item) {
@@ -480,7 +489,9 @@ export class Studio {
         hit.point,
       );
       this.body.release("magnet");
-      this.body.grab(e.pointerId, hit.point.toArray(), normal.toArray());
+      this.body.grab(e.pointerId, hit.point.toArray(), normal.toArray(), 0.75, {
+        stretch: !this.coating || this.coating.removed.size >= 4,
+      });
       this.pointers.set(e.pointerId, {
         plane,
         point: hit.point.clone(),
